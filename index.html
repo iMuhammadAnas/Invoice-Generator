@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invoice Generator</title>
+  <style>
+    /* (Same CSS as your original code) */
+    * {
+      box-sizing: border-box;
+      font-family: 'Arial', sans-serif;
+    }
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    .total-row {
+      font-weight: bold;
+      background-color: #f2f2f2;
+    }
+    .action-buttons {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+    }
+    #invoicePreview {
+      margin-top: 30px;
+      padding: 20px;
+      border: 1px solid #ddd;
+      background-color: white;
+    }
+    .invoice-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .invoice-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+    }
+    .invoice-details {
+      text-align: right;
+    }
+    .client-info, .company-info {
+      margin-bottom: 20px;
+    }
+    .print-only {
+      display: none;
+    }
+    .file-input {
+      display: none;
+    }
+    .file-label {
+      display: inline-block;
+      padding: 6px 12px;
+      background-color: #e9e9e9;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .file-name {
+      margin-left: 10px;
+      font-style: italic;
+    }
+    @media print {
+      .no-print {
+        display: none;
+      }
+      .print-only {
+        display: block;
+      }
+      body {
+        background-color: white;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        padding: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="no-print">Invoice Generator</h1>
+
+    <div class="no-print">
+      <div class="form-group">
+        <label for="companyName">Your Company Name</label>
+        <input type="text" id="companyName" placeholder="Enter your company name">
+      </div>
+
+      <div class="form-group">
+        <label for="clientName">Client Name</label>
+        <input type="text" id="clientName" placeholder="Enter client name">
+      </div>
+
+      <div class="form-group">
+        <label for="invoiceNumber">Invoice Number</label>
+        <input type="text" id="invoiceNumber" placeholder="Enter invoice number">
+      </div>
+
+      <div class="form-group">
+        <label for="invoiceDate">Invoice Month</label>
+        <input type="month" id="invoiceDate">
+      </div>
+
+      <h3>Items</h3>
+      <table id="itemsTable">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Price</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="itemsBody"></tbody>
+      </table>
+
+      <button id="addItemBtn">Add Item</button>
+
+
+      <div class="action-buttons">
+        <button id="generateBtn">Generate Invoice</button>
+        <button id="printBtn" disabled>Print Invoice</button>
+        <button id="clearBtn">Clear All</button>
+      </div>
+    </div>
+
+    <div id="invoicePreview">
+      <div class="invoice-header">
+        <div class="company-info">
+          <h2 id="previewCompanyName">Your Company Name</h2>
+        </div>
+        <div class="invoice-details">
+          <div class="invoice-title">INVOICE</div>
+          <p>Invoice #: <span id="previewInvoiceNumber">INV-001</span></p>
+          <p>Date: <span id="previewInvoiceDate">May 2025</span></p>
+        </div>
+      </div>
+
+      <div class="client-info">
+        <h3>Bill To:</h3>
+        <p id="previewClientName">Client Name</p>
+      </div>
+
+      <table id="previewItemsTable">
+        <thead>
+          <tr>
+            <th>File</th>
+            <th>Price</th>
+          </tr>
+        </thead>
+        <tbody id="previewItemsBody"></tbody>
+        <tfoot>
+          <tr class="total-row">
+            <td style="text-align: right;">Total:</td>
+            <td id="total">0</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="print-only">
+        <p> <span id="generatedDate"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      let itemCount = 0;
+      const itemsBody = document.getElementById('itemsBody');
+      const previewItemsBody = document.getElementById('previewItemsBody');
+      const addItemBtn = document.getElementById('addItemBtn');
+      const generateBtn = document.getElementById('generateBtn');
+      const printBtn = document.getElementById('printBtn');
+      const clearBtn = document.getElementById('clearBtn');
+
+      function removeExtension(filename) {
+        return filename.replace(/\.[^/.]+$/, "");
+      }
+
+      function formatNumber(num) {
+        return num % 1 === 0 ? num.toString() : num.toFixed(2);
+      }
+
+      const today = new Date().toISOString().slice(0, 7);
+      document.getElementById('invoiceDate').value = today;
+
+      function addItemRow() {
+        itemCount++;
+        const row = document.createElement('tr');
+        row.id = `itemRow-${itemCount}`;
+        row.innerHTML = `
+          <td>
+            <input type="file" id="itemFile-${itemCount}" class="file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
+            <label for="itemFile-${itemCount}" class="file-label">Choose File</label>
+            <span class="file-name" id="fileName-${itemCount}">No file chosen</span>
+          </td>
+          <td><input type="number" id="itemPrice-${itemCount}" placeholder="Price" min="0" step="1" value="0"></td>
+          <td><button onclick="removeItem(${itemCount})">Remove</button></td>
+        `;
+        itemsBody.appendChild(row);
+        document.getElementById(`itemFile-${itemCount}`).addEventListener('change', function (e) {
+          const fileName = e.target.files[0] ? removeExtension(e.target.files[0].name) : 'No file chosen';
+          document.getElementById(`fileName-${itemCount}`).textContent = fileName;
+        });
+      }
+
+      window.removeItem = function (id) {
+        const row = document.getElementById(`itemRow-${id}`);
+        if (row) {
+          row.remove();
+          calculateTotal();
+        }
+      };
+
+      function calculateTotal() {
+        let total = 0;
+        previewItemsBody.innerHTML = '';
+        for (let i = 1; i <= itemCount; i++) {
+          const row = document.getElementById(`itemRow-${i}`);
+          if (row) {
+            const fileInput = document.getElementById(`itemFile-${i}`);
+            const fileName = fileInput.files[0] ? removeExtension(fileInput.files[0].name) : 'File';
+            const price = parseFloat(document.getElementById(`itemPrice-${i}`).value) || 0;
+            total += price;
+            const previewRow = document.createElement('tr');
+            previewRow.innerHTML = `<td>${fileName}</td><td>${formatNumber(price)}</td>`;
+            previewItemsBody.appendChild(previewRow);
+          }
+        }
+        document.getElementById('total').textContent = formatNumber(total);
+        return total > 0;
+      }
+
+      function generateInvoice() {
+        document.getElementById('previewCompanyName').textContent = document.getElementById('companyName').value || 'Your Company Name';
+        document.getElementById('previewClientName').textContent = document.getElementById('clientName').value || 'Client Name';
+        document.getElementById('previewInvoiceNumber').textContent = document.getElementById('invoiceNumber').value || 'INV-001';
+
+        const rawDate = document.getElementById('invoiceDate').value;
+        const [year, month] = rawDate ? rawDate.split('-') : [today.split('-')[0], today.split('-')[1]];
+        const formattedDate = new Date(`${year}-${month}-01`).toLocaleString('default', { month: 'long', year: 'numeric' });
+        document.getElementById('previewInvoiceDate').textContent = formattedDate;
+
+        const hasItems = calculateTotal();
+        printBtn.disabled = !hasItems;
+        document.getElementById('invoicePreview').scrollIntoView({ behavior: 'smooth' });
+      }
+
+      function clearAll() {
+        document.getElementById('companyName').value = '';
+        document.getElementById('clientName').value = '';
+        document.getElementById('invoiceNumber').value = '';
+        document.getElementById('invoiceDate').value = today;
+        document.getElementById('notes').value = '';
+        itemsBody.innerHTML = '';
+        previewItemsBody.innerHTML = '';
+        itemCount = 0;
+        document.getElementById('total').textContent = '0';
+        printBtn.disabled = true;
+      }
+
+      function printInvoice() {
+        window.print();
+      }
+
+      addItemBtn.addEventListener('click', addItemRow);
+      generateBtn.addEventListener('click', generateInvoice);
+      printBtn.addEventListener('click', printInvoice);
+      clearBtn.addEventListener('click', clearAll);
+
+      addItemRow();
+    });
+  </script>
+</body>
+</html>

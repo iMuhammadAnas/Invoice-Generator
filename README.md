@@ -1,1 +1,1 @@
-## simple invoice generator
+## simple invoice generator.

@@ -220,12 +220,20 @@
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       let itemCount = 0;
+
+      const STORAGE_KEY = 'invoiceGeneratorData';
+
       const itemsBody = document.getElementById('itemsBody');
       const previewItemsBody = document.getElementById('previewItemsBody');
       const addItemBtn = document.getElementById('addItemBtn');
       const generateBtn = document.getElementById('generateBtn');
       const printBtn = document.getElementById('printBtn');
       const clearBtn = document.getElementById('clearBtn');
+
+      const companyNameInput = document.getElementById('companyName');
+      const clientNameInput = document.getElementById('clientName');
+      const invoiceNumberInput = document.getElementById('invoiceNumber');
+      const invoiceDateInput = document.getElementById('invoiceDate');
 
       function removeExtension(filename) {
         return filename.replace(/\.[^/.]+$/, "");
@@ -236,93 +244,291 @@
       }
 
       const today = new Date().toISOString().slice(0, 7);
-      document.getElementById('invoiceDate').value = today;
 
-      function addItemRow() {
+      function getItemRowsData() {
+        const items = [];
+
+        for (let i = 1; i <= itemCount; i++) {
+          const row = document.getElementById(`itemRow-${i}`);
+
+          if (!row) continue;
+
+          const fileInput = document.getElementById(`itemFile-${i}`);
+          const priceInput = document.getElementById(`itemPrice-${i}`);
+          const fileNameElement = document.getElementById(`fileName-${i}`);
+
+          let fileName = fileNameElement?.textContent || 'No file chosen';
+
+          // If a file is currently selected, use its actual name.
+          if (fileInput?.files?.[0]) {
+            fileName = removeExtension(fileInput.files[0].name);
+          }
+
+          items.push({
+            fileName: fileName,
+            price: priceInput ? priceInput.value : '0'
+          });
+        }
+
+        return items;
+      }
+
+      function saveToLocalStorage() {
+        const data = {
+          companyName: companyNameInput.value,
+          clientName: clientNameInput.value,
+          invoiceNumber: invoiceNumberInput.value,
+          invoiceDate: invoiceDateInput.value,
+          items: getItemRowsData()
+        };
+
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch (error) {
+          console.error('Could not save invoice data:', error);
+        }
+      }
+
+      function loadFromLocalStorage() {
+        try {
+          const savedData = localStorage.getItem(STORAGE_KEY);
+
+          if (!savedData) {
+            invoiceDateInput.value = today;
+            return;
+          }
+
+          const data = JSON.parse(savedData);
+
+          companyNameInput.value = data.companyName || '';
+          clientNameInput.value = data.clientName || '';
+          invoiceNumberInput.value = data.invoiceNumber || '';
+          invoiceDateInput.value = data.invoiceDate || today;
+
+          itemsBody.innerHTML = '';
+          itemCount = 0;
+
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            data.items.forEach(function (item) {
+              addItemRow(item.fileName || 'No file chosen', item.price || '0', false);
+            });
+          } else {
+            addItemRow();
+          }
+
+          calculateTotal();
+        } catch (error) {
+          console.error('Could not load saved invoice data:', error);
+
+          invoiceDateInput.value = today;
+          itemsBody.innerHTML = '';
+          itemCount = 0;
+          addItemRow();
+        }
+      }
+
+      function addItemRow(savedFileName = 'No file chosen', savedPrice = '0', shouldSave = true) {
         itemCount++;
+
+        const currentId = itemCount;
+
         const row = document.createElement('tr');
-        row.id = `itemRow-${itemCount}`;
+        row.id = `itemRow-${currentId}`;
+
         row.innerHTML = `
           <td>
-            <input type="file" id="itemFile-${itemCount}" class="file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
-            <label for="itemFile-${itemCount}" class="file-label">Choose File</label>
-            <span class="file-name" id="fileName-${itemCount}">No file chosen</span>
+            <input type="file" id="itemFile-${currentId}" class="file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.png">
+            <label for="itemFile-${currentId}" class="file-label">Choose File</label>
+            <span class="file-name" id="fileName-${currentId}">${escapeHtml(savedFileName)}</span>
           </td>
-          <td><input type="number" id="itemPrice-${itemCount}" placeholder="Price" min="0" step="1" value="0"></td>
-          <td><button onclick="removeItem(${itemCount})">Remove</button></td>
+          <td>
+            <input type="number" id="itemPrice-${currentId}" placeholder="Price" min="0" step="1" value="${escapeHtml(savedPrice)}">
+          </td>
+          <td>
+            <button type="button" onclick="removeItem(${currentId})">Remove</button>
+          </td>
         `;
+
         itemsBody.appendChild(row);
-        document.getElementById(`itemFile-${itemCount}`).addEventListener('change', function (e) {
-          const fileName = e.target.files[0] ? removeExtension(e.target.files[0].name) : 'No file chosen';
-          document.getElementById(`fileName-${itemCount}`).textContent = fileName;
+
+        const fileInput = document.getElementById(`itemFile-${currentId}`);
+        const priceInput = document.getElementById(`itemPrice-${currentId}`);
+
+        fileInput.addEventListener('change', function (e) {
+          const fileName = e.target.files[0]
+            ? removeExtension(e.target.files[0].name)
+            : 'No file chosen';
+
+          document.getElementById(`fileName-${currentId}`).textContent = fileName;
+
+          calculateTotal();
+          saveToLocalStorage();
         });
+
+        priceInput.addEventListener('input', function () {
+          calculateTotal();
+          saveToLocalStorage();
+        });
+
+        if (shouldSave) {
+          saveToLocalStorage();
+        }
+      }
+
+      function escapeHtml(value) {
+        const div = document.createElement('div');
+        div.textContent = String(value ?? '');
+        return div.innerHTML;
       }
 
       window.removeItem = function (id) {
         const row = document.getElementById(`itemRow-${id}`);
+
         if (row) {
           row.remove();
           calculateTotal();
+          saveToLocalStorage();
         }
       };
 
       function calculateTotal() {
         let total = 0;
+
         previewItemsBody.innerHTML = '';
+
         for (let i = 1; i <= itemCount; i++) {
           const row = document.getElementById(`itemRow-${i}`);
-          if (row) {
-            const fileInput = document.getElementById(`itemFile-${i}`);
-            const fileName = fileInput.files[0] ? removeExtension(fileInput.files[0].name) : 'File';
-            const price = parseFloat(document.getElementById(`itemPrice-${i}`).value) || 0;
-            total += price;
-            const previewRow = document.createElement('tr');
-            previewRow.innerHTML = `<td>${fileName}</td><td>${formatNumber(price)}</td>`;
-            previewItemsBody.appendChild(previewRow);
+
+          if (!row) continue;
+
+          const fileInput = document.getElementById(`itemFile-${i}`);
+          const fileNameElement = document.getElementById(`fileName-${i}`);
+          const priceInput = document.getElementById(`itemPrice-${i}`);
+
+          let fileName = fileNameElement?.textContent || 'File';
+
+          if (fileInput?.files?.[0]) {
+            fileName = removeExtension(fileInput.files[0].name);
           }
+
+          const price = parseFloat(priceInput?.value) || 0;
+
+          total += price;
+
+          const previewRow = document.createElement('tr');
+
+          const fileCell = document.createElement('td');
+          fileCell.textContent = fileName;
+
+          const priceCell = document.createElement('td');
+          priceCell.textContent = formatNumber(price);
+
+          previewRow.appendChild(fileCell);
+          previewRow.appendChild(priceCell);
+
+          previewItemsBody.appendChild(previewRow);
         }
+
         document.getElementById('total').textContent = formatNumber(total);
+
         return total > 0;
       }
 
       function generateInvoice() {
-        document.getElementById('previewCompanyName').textContent = document.getElementById('companyName').value || 'Your Company Name';
-        document.getElementById('previewClientName').textContent = document.getElementById('clientName').value || 'Client Name';
-        document.getElementById('previewInvoiceNumber').textContent = document.getElementById('invoiceNumber').value || 'INV-001';
+        document.getElementById('previewCompanyName').textContent =
+          companyNameInput.value || 'Your Company Name';
 
-        const rawDate = document.getElementById('invoiceDate').value;
-        const [year, month] = rawDate ? rawDate.split('-') : [today.split('-')[0], today.split('-')[1]];
-        const formattedDate = new Date(`${year}-${month}-01`).toLocaleString('default', { month: 'long', year: 'numeric' });
+        document.getElementById('previewClientName').textContent =
+          clientNameInput.value || 'Client Name';
+
+        document.getElementById('previewInvoiceNumber').textContent =
+          invoiceNumberInput.value || 'INV-001';
+
+        const rawDate = invoiceDateInput.value;
+
+        const [year, month] = rawDate
+          ? rawDate.split('-')
+          : today.split('-');
+
+        const formattedDate = new Date(`${year}-${month}-01`)
+          .toLocaleString('default', {
+            month: 'long',
+            year: 'numeric'
+          });
+
         document.getElementById('previewInvoiceDate').textContent = formattedDate;
 
         const hasItems = calculateTotal();
+
         printBtn.disabled = !hasItems;
-        document.getElementById('invoicePreview').scrollIntoView({ behavior: 'smooth' });
+
+        saveToLocalStorage();
+
+        document.getElementById('invoicePreview').scrollIntoView({
+          behavior: 'smooth'
+        });
       }
 
       function clearAll() {
-        document.getElementById('companyName').value = '';
-        document.getElementById('clientName').value = '';
-        document.getElementById('invoiceNumber').value = '';
-        document.getElementById('invoiceDate').value = today;
-        document.getElementById('notes').value = '';
+        const confirmed = confirm(
+          'Are you sure you want to clear all invoice data? This will also remove the saved data from this browser.'
+        );
+
+        if (!confirmed) return;
+
+        companyNameInput.value = '';
+        clientNameInput.value = '';
+        invoiceNumberInput.value = '';
+        invoiceDateInput.value = today;
+
         itemsBody.innerHTML = '';
         previewItemsBody.innerHTML = '';
+
         itemCount = 0;
+
+        document.getElementById('previewCompanyName').textContent = 'Your Company Name';
+        document.getElementById('previewClientName').textContent = 'Client Name';
+        document.getElementById('previewInvoiceNumber').textContent = 'INV-001';
+        document.getElementById('previewInvoiceDate').textContent =
+          new Date(`${today}-01`).toLocaleString('default', {
+            month: 'long',
+            year: 'numeric'
+          });
+
         document.getElementById('total').textContent = '0';
+
         printBtn.disabled = true;
+
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch (error) {
+          console.error('Could not clear local storage:', error);
+        }
+
+        addItemRow();
       }
 
       function printInvoice() {
         window.print();
       }
 
-      addItemBtn.addEventListener('click', addItemRow);
+      // Automatically save normal input fields whenever they change.
+      [companyNameInput, clientNameInput, invoiceNumberInput, invoiceDateInput]
+        .forEach(function (input) {
+          input.addEventListener('input', saveToLocalStorage);
+          input.addEventListener('change', saveToLocalStorage);
+        });
+
+      addItemBtn.addEventListener('click', function () {
+        addItemRow();
+      });
+
       generateBtn.addEventListener('click', generateInvoice);
       printBtn.addEventListener('click', printInvoice);
       clearBtn.addEventListener('click', clearAll);
 
-      addItemRow();
+      // Restore saved data when the page loads.
+      loadFromLocalStorage();
     });
   </script>
 </body>
